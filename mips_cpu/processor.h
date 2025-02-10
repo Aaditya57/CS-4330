@@ -38,6 +38,9 @@ class Processor {
 		uint32_t alu_zero; //alu zero signal
 
 		uint32_t alu_result; //result of calculation
+
+		uint32_t read_data_mem;
+		uint32_t write_data_mem; //signals
 	};
 	
 	struct MEM_WB{
