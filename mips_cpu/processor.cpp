@@ -124,10 +124,10 @@ void Processor::pipelined_fetch(){
 
 void Processor::pipelined_decode(){
 	// decode into contol signals
-	control.decode(state.fetchDecode.instruction); //reach back to IF/ID for instruction
+	control.decode(prevState.fetchDecode.instruction); //reach back to IF/ID for instruction
 	DEBUG(control.print());
 
-	uint32_t instruction = state.fetchDecode.instruction; //extract instruction from IF/ID
+	uint32_t instruction = prevState.fetchDecode.instruction; //extract instruction from IF/ID
 
 	// extract rs, rt, rd, imm, funct 
 	state.decodeExe.opcode = (instruction >> 26) & 0x3f; //send opcode to ID/EX
@@ -154,12 +154,12 @@ void Processor::pipelined_decode(){
 
 void Processor::pipelined_execute(){
 	// Execution 
-	alu.generate_control_inputs(control.ALU_op, state.decodeExe.funct, state.decodeExe.opcode); //generate control inputs
+	alu.generate_control_inputs(control.ALU_op, prevState.decodeExe.funct, prevState.decodeExe.opcode); //generate control inputs
 											  //from decodeExe vals
 	// Sign Extend Or Zero Extend the immediate
 	// Using Arithmetic right shift in order to replicate 1 
-	int imm = state.decodeExe.imm;
-	state.decodeExe.imm = control.zero_extend ? imm : (imm >> 15) ? 0xffff0000 | imm : imm; //line loks weird, check later (why redefine imm?)
+	int imm = prevState.decodeExe.imm;
+	prevState.decodeExe.imm = control.zero_extend ? imm : (imm >> 15) ? 0xffff0000 | imm : imm; //line loks weird, check later (why redefine imm?)
 	
 	// Find operands for the ALU Execution
 	// Operand 1 is always R[rs] -> read_data_1, except sll and srl
@@ -179,35 +179,37 @@ void Processor::pipelined_mem(){
 	// Memory
 	// First read no matter whether it is a load or a store
 
-	memory->access(state.exeMem.alu_result, state.exeMem.read_data_mem, 0, control.mem_read | control.mem_write, 0);
+	memory->access(prevState.exeMem.alu_result, prevState.exeMem.read_data_mem, 0, control.mem_read | control.mem_write, 0);
 	
 	// Stores: sb or sh mask and preserve original leftmost bits
-	state.exeMem.write_data_mem = control.halfword ? (state.exeMem.read_data_mem & 0xffff0000) | (state.decodeExe.read_data_2 & 0xffff) : 
-					control.byte ? (state.exeMem.read_data_mem & 0xffffff00) | (state.decodeExe.read_data_2 & 0xff): state.decodeExe.read_data_2;
+	prevState.exeMem.write_data_mem = control.halfword ? (prevState.exeMem.read_data_mem & 0xffff0000) | (prevState.decodeExe.read_data_2 & 0xffff) : 
+					control.byte ? (prevState.exeMem.read_data_mem & 0xffffff00) | (prevState.decodeExe.read_data_2 & 0xff): prevState.decodeExe.read_data_2;
 	// Write to memory only if mem_write is 1, i.e store
-	memory->access(state.exeMem.alu_result, state.exeMem.read_data_mem, state.exeMem.write_data_mem, 
+	memory->access(prevState.exeMem.alu_result, prevState.exeMem.read_data_mem, prevState.exeMem.write_data_mem, 
 								control.mem_read, control.mem_write);
 
 	// Loads: lbu or lhu modify read data by masking
 	state.exeMem.read_data_mem &= control.halfword ? 0xffff : control.byte ? 0xff : 0xffffffff;
 
-	state.memWrite.write_reg = control.link ? 31 : control.reg_dest ? state.decodeExe.rd : state.decodeExe.rt;
+	state.memWrite.write_reg = control.link ? 31 : control.reg_dest ? prevState.decodeExe.rd : prevState.decodeExe.rt;
 
-	state.memWrite.write_data = control.link ? regfile.pc+8 : control.mem_to_reg ? state.exeMem.read_data_mem : state.exeMem.alu_result;  
+	state.memWrite.write_data = control.link ? regfile.pc+8 : control.mem_to_reg ? prevState.exeMem.read_data_mem : prevState.exeMem.alu_result;  
 }
 
 void Processor::pipelined_writeb(){
 	// Write Back
-	regfile.access(0, 0, state.decodeExe.read_data_2, state.decodeExe.read_data_2, state.memWrite.write_reg, control.reg_write, state.memWrite.write_data);
+	regfile.access(0, 0, prevState.decodeExe.read_data_2, prevState.decodeExe.read_data_2, prevState.memWrite.write_reg, control.reg_write, prevState.memWrite.write_data);
 	
 	// Update PC
-	regfile.pc += (control.branch && !control.bne && state.exeMem.alu_zero) || (control.bne && !state.exeMem.alu_zero) ? state.decodeExe.imm << 2 : 0; 
-	regfile.pc = control.jump_reg ? state.decodeExe.read_data_1 : control.jump ? (regfile.pc & 0xf0000000) & (state.decodeExe.addr << 2): regfile.pc;
+	regfile.pc += (control.branch && !control.bne && state.exeMem.alu_zero) || (control.bne && !prevState.exeMem.alu_zero) ? prevState.decodeExe.imm << 2 : 0; 
+	regfile.pc = control.jump_reg ? prevState.decodeExe.read_data_1 : control.jump ? (regfile.pc & 0xf0000000) & (prevState.decodeExe.addr << 2): regfile.pc;
 
 }
 
 
 void Processor::pipeline_cycle(){
+	state = prevState; //update the state (regs) to contrain the state from the previous cycle
+
 	pipelined_fetch();
 	pipelined_decode();
 	pipelined_execute();

@@ -59,6 +59,7 @@ class Processor {
 	};
 
 	pipelineState state;
+	pipelineState prevState; //store the previous state so we can simulate shared state across contexts
 
         // add private functions
         void single_cycle_processor_advance();
