@@ -208,6 +208,8 @@ void Processor::pipelined_writeb(){
 
 
 void Processor::pipeline_cycle(){
+	state = prevState; //update the state (regs) to contrain the state from the previous cycle
+
 	pipelined_fetch();
 	pipelined_decode();
 	pipelined_execute();
