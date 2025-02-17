@@ -141,7 +141,9 @@ void Cache::invalidateLine(uint32_t address) {
 }
 
 bool Memory::access(uint32_t address, uint32_t &read_data, uint32_t write_data, bool mem_read, bool mem_write) {
-    if (opt_level == 0) {
+    //cout << "\naccessed memory at: " << address << "\n";
+      if (opt_level <= 1) {
+//    if (opt_level == 0) {
         if (mem_read) {
             read_data = mem[address/4];
         }
