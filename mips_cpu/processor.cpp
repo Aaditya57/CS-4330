@@ -115,7 +115,10 @@ void Processor::single_cycle_processor_advance() {
 }
 
 void Processor::pipelined_fetch(){
+	//if (!regfile.pc) //account for first instruction
 	memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0); //fetch instruction into IF/ID reg
+	//else
+	//	memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0); //fetch instruction into IF/ID reg
 
 	DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
 	// increment pc
@@ -216,6 +219,7 @@ void Processor::pipeline_cycle(){
 	pipelined_execute();
 	pipelined_mem();
 	pipelined_writeb();
+
 }
 
 void Processor::pipelined_processor_advance() {
