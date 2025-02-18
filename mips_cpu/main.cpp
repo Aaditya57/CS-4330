@@ -99,9 +99,10 @@ int main(int argc, char *argv[]) {
     Memory memory;
     Processor processor(&memory); 
     uint32_t end_pc = 0;
-
+    //bool val =true;
     int optLevel = 0;
 
+    //while(val){
     while (true) {
       char c = getopt_long(argc, argv, "b:O01234h", long_options, &option_index);
       if (c == -1) {
@@ -118,11 +119,18 @@ int main(int argc, char *argv[]) {
               exit(0);
           case 'b':
               end_pc = load(optarg, memory);
-              break;
+              processor.initialize(optLevel);
+              initialized = 1;
+	      break;
           case 'O':
               break;
           case '0':
           case '1':
+	      optLevel = 1;
+              processor.initialize(optLevel);
+              initialized = 1;
+              break;
+
           case '2':
           case '3':
           case '4':
@@ -137,6 +145,7 @@ int main(int argc, char *argv[]) {
     uint64_t num_cycles = 0;
     while (processor.getPC() <= end_pc) {
         processor.advance();
+	cout << "\nPC is " << processor.getPC() << "\n";
         cout << "\nCYCLE " << num_cycles << "\n";
         processor.printRegFile();
         num_cycles++;
