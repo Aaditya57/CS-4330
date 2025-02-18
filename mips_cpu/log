@@ -1,0 +1,10 @@
+Required Options.
+--bmk <path-to-executable>           Path to the benchmark executable binary.
+Optional:
+--help                               Print this help message
+-O0                                  Optimization Level 0 (single-cycle processor)
+-O1                                  Optimization Level 1 (pipelined processor)
+-O2                                  Optimization Level 2 (custom optimization TBD; includes O1)
+-O3                                  Optimization Level 3 (custom optimization TBD; includes O2)
+-O4                                  Optimization Level 4 (custom optimization TBD; includes O3)
+                                     Defaults to -O0
