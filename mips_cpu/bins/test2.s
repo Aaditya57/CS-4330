@@ -5,13 +5,13 @@
     .ent    __start
     .type   __start, @function
 __start:
-   addi $0, $2, 9
-   addi $0, $3, 5
-   addi $0, $4, 9
-   addi $0, $5, 5
-   addi $0, $6, 9
+   addi $2, $2, 9
+   addi $3, $3, 5
+   addi $4, $4, 9
+   addi $5, $5, 5
+   addi $6, $6, 9
 
-label:
-   or $4, $5, $6
+#label:
+#   or $4, $5, $6
     .end    __start
     .size   __start, .-__start

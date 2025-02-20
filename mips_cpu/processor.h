@@ -14,38 +14,43 @@ class Processor {
         // pipelined processor
 
 	struct IF_ID{
-		uint32_t instruction; //raw instruction
+		uint32_t instruction; //obvious
 	};
    
 	struct ID_EX{
-		int opcode; //store the raw decoded opcode
+		int opcode;
+		int rs, rt, rd;
 
-		//instruction specific fields//
-		int rs, rt, rd; //store operand registers
-		int shamt, funct; //store R-Type vals
-		uint32_t imm; //store I-Type immediate
-		int addr; //address for J-Type instructions
+		uint32_t shamt; //?
+		uint32_t funct; //function bits
+		uint32_t imm; //immediate value
+		uint32_t addr; //address value
 
-		uint32_t read_data_1;
-		uint32_t read_data_2; //store results of read data (?)			
+		uint32_t read_data_1, read_data_2; //product of
+						   //reg reads
 	};
     
 
 	struct EX_MEM{
-		uint32_t operand_1; //operands for write back (?)
-		uint32_t operand_2;
+		uint32_t imm; //persits imm from previous stage
 
-		uint32_t alu_zero; //alu zero signal
-
-		uint32_t alu_result; //result of calculation
-
-		uint32_t read_data_mem;
-		uint32_t write_data_mem; //signals
+		uint32_t read_data_1, read_data_2; //persist from prev stage
+		int rd, rt; //registers
+		uint32_t operand_1, operand_2; //operands from prev stage
+		uint32_t alu_zero; //same
+		uint32_t addr; //address for mem access
+		uint32_t alu_result;
 	};
 	
 	struct MEM_WB{
-		int write_reg; //register to write back
-		uint32_t write_data; //data to write back		
+		int write_reg; //reg to write to
+		uint32_t write_data; //data to write
+		
+		uint32_t imm;
+		uint32_t addr;
+		uint32_t alu_zero;
+		uint32_t read_data_1, read_data_2;
+		
 	};
 	
 	//allow access to correct pipeline registers across
@@ -53,7 +58,7 @@ class Processor {
 
 	struct pipelineState{
 		IF_ID fetchDecode;
-		ID_EX decodeExe;
+		ID_EX decExe;
 		EX_MEM exeMem;
 		MEM_WB memWrite;
 	};
@@ -93,7 +98,6 @@ class Processor {
 	
 	void pipelined_mem();
 
-	void pipelined_writeb();
+	void pipelined_wb();
 	
-	void pipeline_cycle();	
 };
