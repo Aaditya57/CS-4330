@@ -29,6 +29,49 @@ void Processor::initialize(int level) {
 			   .zero_extend = 0};
    
 	opt_level = level;
+
+	state.fetchDecode = {
+		.instruction = 0
+	};
+
+	state.decExe = {
+		.opcode = 0,
+		.rs = 0,
+		.rt = 0,
+		.rd = 0,
+		.shamt = 0,
+		.funct = 0,
+		.imm = 0,
+		.addr = 0,
+		.read_data_1 = 0,
+		.read_data_2 = 0
+	};
+
+	state.exeMem = {
+		.imm = 0,
+		.read_data_1 = 0,
+		.read_data_2 = 0,
+		.rd = 0,
+		.rt = 0,
+		.operand_1 = 0,
+		.operand_2 = 0,
+		.alu_zero = 0,
+		.addr = 0,
+		.alu_result = 0
+	};
+
+	state.memWrite = {
+		.write_reg = 0,
+		.write_data = 0,
+		.imm = 0,
+		.addr = 0,
+		.alu_zero = 0,
+		.read_data_1 = 0,
+		.read_data_2 = 0
+	};
+
+	// Initialize prevState to same values
+	prevState = state;
 	// Optimization level-specific initialization
 }
 
@@ -127,22 +170,22 @@ void Processor::pipelined_decode(){
 	DEBUG(control.print());
 
 /*	*	*	*	*	*	*	*	*	*	*	*	*\
-*    bool reg_dest;           // 0 if rt, 1 if rd
-*    bool jump;               // 1 if jummp
-*    bool jump_reg;           // 1 if jr
-*    bool link;               // 1 if jal
-*    bool shift;              // 1 if sll or srl
-*    bool branch;             // 1 if branch
-*    bool bne;                // 1 if bne
-*    bool mem_read;           // 1 if memory needs to be read
-*    bool mem_to_reg;         // 1 if memory needs to written to reg
-*    unsigned ALU_op : 2;     // 10 for R-type, 00 for LW/SW, 01 for BEQ/BNE, 11 for others
-*    bool mem_write;          // 1 if needs to be written to memory
-*    bool halfword;           // 1 if loading/storing halfword from memory
-*    bool byte;               // 1 if loading/storing a byte from memory
-*    bool ALU_src;            // 0 if second operand is from reg_file, 1 if imm
-*    bool reg_write;          // 1 if need to write back to reg file
-*    bool zero_extend;        // 1 if immediate needs to be zero-extended
+*	bool reg_dest;		   // 0 if rt, 1 if rd
+*	bool jump;			   // 1 if jummp
+*	bool jump_reg;		   // 1 if jr
+*	bool link;			   // 1 if jal
+*	bool shift;			  // 1 if sll or srl
+*	bool branch;			 // 1 if branch
+*	bool bne;				// 1 if bne
+*	bool mem_read;		   // 1 if memory needs to be read
+*	bool mem_to_reg;		 // 1 if memory needs to written to reg
+*	unsigned ALU_op : 2;	 // 10 for R-type, 00 for LW/SW, 01 for BEQ/BNE, 11 for others
+*	bool mem_write;		  // 1 if needs to be written to memory
+*	bool halfword;		   // 1 if loading/storing halfword from memory
+*	bool byte;			   // 1 if loading/storing a byte from memory
+*	bool ALU_src;			// 0 if second operand is from reg_file, 1 if imm
+*	bool reg_write;		  // 1 if need to write back to reg file
+*	bool zero_extend;		// 1 if immediate needs to be zero-extended
 *
 \*	*	*	*	*	*	*	*	*	*	*	*	*/
 
