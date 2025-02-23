@@ -260,13 +260,14 @@ void Processor::pipelined_execute(){
 			operand_2 = prevState.exeMem.alu_result;
 			break;
 		case(2):
-			operand_2 = prevState.memWrite.write_data;
+			operand_2 = prevState.memWrite.write_data;	
+			break;
 	}
 
 	//state.exeMem.operand_2 = ctrl.ALU_src ? imm : read_data_2;
 	uint32_t alu_zero = 0;
 
-		state.exeMem.alu_result = alu.execute(state.exeMem.operand_1, state.exeMem.operand_2, alu_zero);
+	state.exeMem.alu_result = alu.execute(operand_1, operand_2, alu_zero);
 
 	//send updated values down the pipeline
 	state.exeMem.read_data_1 = prevState.decExe.read_data_1;
@@ -330,33 +331,42 @@ void Processor::pipelined_wb(){
 void Processor::detect_data_hazard(control_t *ctrl){
 	//EX/MEM forward -> EX
 	if (prevState.exeMem.control.reg_write &&
-		(prevState.exeMem.rd == prevState.decExe.rs) &&
-		prevState.exeMem.rd != 0 &&  // rd is not zero
-		prevState.decExe.rs != 0)	// rs is not zero
-			ctrl->forward_a = 1;
-	//EX/MEM forward -> EX
+		((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rs) ||  // R-type
+	 	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rs)) &&  // I-type
+		(prevState.exeMem.rd != 0 || prevState.exeMem.rt != 0) &&  // destination reg is not zero
+		prevState.decExe.rs != 0)  // source reg is not zero
+			ctrl->forward_a = 1;		
+
 	if (prevState.exeMem.control.reg_write &&
-		(prevState.exeMem.rd == prevState.decExe.rt) &&
-		prevState.exeMem.rd != 0 &&  // rd is not zero
-		prevState.decExe.rt != 0)	// rs is not zero
-			ctrl->forward_b = 1;
+		((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rt) ||  // R-type
+	 	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rt)) &&  // I-type
+		(prevState.exeMem.rd != 0 || prevState.exeMem.rt != 0) &&
+		prevState.decExe.rt != 0)
+			ctrl->forward_b = 1;	
 
 	//MEM/WB forward -> EX
 	if (prevState.memWrite.control.reg_write &&
-		(prevState.memWrite.write_reg == state.decExe.rs) &&
-		prevState.memWrite.write_reg != 0 &&
-		(prevState.exeMem.rd != state.decExe.rs || prevState.exeMem.control.reg_write == 0) &&  // rd is not zero
-		state.decExe.rs != 0)	// rs is not zero
+		((prevState.memWrite.control.reg_dest && prevState.memWrite.write_reg == prevState.decExe.rs) ||  // R-type
+	 	(!prevState.memWrite.control.reg_dest && prevState.memWrite.write_reg == prevState.decExe.rs)) &&  // I-type
+		(prevState.memWrite.write_reg != 0) && 
+		// Don't forward if EX/MEM is already forwarding to this register
+		(!(prevState.exeMem.control.reg_write && 
+	  	((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rs) ||
+	   	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rs)))) &&
+		prevState.decExe.rs != 0)
 			ctrl->forward_a = 2;
-	
-	//MEM/WB forward -> EX
+
+	//MEM/WB forward -> EX 
 	if (prevState.memWrite.control.reg_write &&
-		(prevState.memWrite.write_reg == state.decExe.rt) &&
-		prevState.memWrite.write_reg != 0 &&  
-		(prevState.exeMem.rd != state.decExe.rt || prevState.exeMem.control.reg_write == 0) &&  // rd is not zero
-		state.decExe.rt != 0)	// rs is not zero
-			ctrl->forward_b = 2;
-	
+		((prevState.memWrite.control.reg_dest && prevState.memWrite.write_reg == prevState.decExe.rt) ||  // R-type
+	 	(!prevState.memWrite.control.reg_dest && prevState.memWrite.write_reg == prevState.decExe.rt)) &&  // I-type
+		(prevState.memWrite.write_reg != 0) &&  
+		// Don't forward if EX/MEM is already forwarding to this register
+		(!(prevState.exeMem.control.reg_write && 
+	  	((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rt) ||
+	   	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rt)))) &&
+		prevState.decExe.rt != 0)
+			ctrl->forward_b = 2;	
 	return;				
 }
 //void detect_control_hazard();
