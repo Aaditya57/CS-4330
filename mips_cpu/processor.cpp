@@ -168,9 +168,9 @@ void Processor::pipelined_decode(){
 	uint32_t instruction = prevState.fetchDecode.instruction;
 	//DEBUG(control.print());
 
-    	control_t new_control;
-    	new_control.decode(instruction);
-    	state.decExe.control = new_control; //push generated control signals to next pipeline reg
+		control_t new_control;
+		new_control.decode(instruction);
+		state.decExe.control = new_control; //push generated control signals to next pipeline reg
 
 /*	*	*	*	*	*	*	*	*	*	*	*	*\
 *	bool reg_dest;		   // 0 if rt, 1 if rd
@@ -234,13 +234,34 @@ void Processor::pipelined_execute(){
 	uint32_t read_data_1 = prevState.decExe.read_data_1;
 	uint32_t read_data_2 = prevState.decExe.read_data_2;
 
-	uint32_t operand_1 = ctrl.shift ? 
-			prevState.decExe.shamt : read_data_1;
-	
-	uint32_t operand_2 = ctrl.ALU_src ? imm : read_data_2;
+	detect_data_hazard(&ctrl);
+
+	uint32_t operand_1 = 0;
+	uint32_t operand_2 = 0;
+
+	switch(ctrl.forward_a){
+		case(0):
+			operand_1 = ctrl.shift ? 
+				prevState.decExe.shamt : read_data_1;
+			break;
+		case(1):
+			operand_1 = prevState.exeMem.alu_result;
+			break;
+	}
+
+	switch(ctrl.forward_b){
+		case(0):
+			operand_2 = ctrl.ALU_src ? imm : read_data_2;
+			break;	
+		case(1):
+			operand_2 = prevState.exeMem.alu_result;
+			break;
+	}
+
+	//state.exeMem.operand_2 = ctrl.ALU_src ? imm : read_data_2;
 	uint32_t alu_zero = 0;
 
-	state.exeMem.alu_result = alu.execute(operand_1, operand_2, alu_zero);
+		state.exeMem.alu_result = alu.execute(state.exeMem.operand_1, state.exeMem.operand_2, alu_zero);
 
 	//send updated values down the pipeline
 	state.exeMem.read_data_1 = prevState.decExe.read_data_1;
@@ -256,7 +277,7 @@ void Processor::pipelined_execute(){
 
 void Processor::pipelined_mem(){
 	control_t &ctrl = prevState.exeMem.control;
-    	state.memWrite.control = ctrl; //same as last time
+		state.memWrite.control = ctrl; //same as last time
 
 	uint32_t read_data_mem = 0;
 	uint32_t write_data_mem = 0;
@@ -300,6 +321,25 @@ void Processor::pipelined_wb(){
 	regfile.pc = ctrl.jump_reg ? prevState.memWrite.read_data_1 : 
 			ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
 }
+
+void Processor::detect_data_hazard(control_t *ctrl){
+
+	if (prevState.exeMem.control.reg_write &&
+		(prevState.exeMem.rd == prevState.decExe.rs) &&
+		prevState.exeMem.rd != 0 &&  // rd is not zero
+		prevState.decExe.rs != 0)	// rs is not zero
+			ctrl->forward_a = 1;
+	
+	if (prevState.exeMem.control.reg_write &&
+		(prevState.exeMem.rd == prevState.decExe.rt) &&
+		prevState.exeMem.rd != 0 &&  // rd is not zero
+		prevState.decExe.rt != 0)	// rs is not zero
+			ctrl->forward_b = 1;
+
+	return;				
+}
+//void detect_control_hazard();
+
 
 void Processor::pipelined_processor_advance() {
 	//state = prevState; //update the state (regs) to contrain the state from the previous cycle
