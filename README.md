@@ -6,13 +6,9 @@ The main branch contains the stable version of the latest incremental optimizati
 
 Status:
 
-    -Current optimization: none (single-cycle)
-    -WIP optimization: pipelining
+    -Current optimization: O1 (pipeline)
+    -WIP optimization: pipelining (cont.)
 
 Known issues to fix:
   
-    -pipeline increments as expected, data seems to be arbitrarily overwritten from registers
-    
-    -all r-type instructions store values in r[0], which likely contributes to the above
-    
-    -no fault or dependency handling is implemented.
+    -none currently, more testing needed
