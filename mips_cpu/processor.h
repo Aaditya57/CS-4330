@@ -2,6 +2,7 @@
 #include "regfile.h"
 #include "ALU.h"
 #include "control.h"
+
 class Processor {
     private:
         int opt_level;
@@ -72,11 +73,12 @@ class Processor {
 	pipelineState state;
 	pipelineState prevState; //store the previous state so we can simulate shared state across contexts
 
+
         // add private functions
         void single_cycle_processor_advance();
         void pipelined_processor_advance();
 
-	void detect_data_hazard();
+	void detect_data_hazard(control_t*);
 	void detect_control_hazard();
  
     public:

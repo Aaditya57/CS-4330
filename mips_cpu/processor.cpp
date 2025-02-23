@@ -247,6 +247,9 @@ void Processor::pipelined_execute(){
 		case(1):
 			operand_1 = prevState.exeMem.alu_result;
 			break;
+		case(2):
+			operand_1 = prevState.memWrite.write_data;
+			break;
 	}
 
 	switch(ctrl.forward_b){
@@ -256,6 +259,8 @@ void Processor::pipelined_execute(){
 		case(1):
 			operand_2 = prevState.exeMem.alu_result;
 			break;
+		case(2):
+			operand_2 = prevState.memWrite.write_data;
 	}
 
 	//state.exeMem.operand_2 = ctrl.ALU_src ? imm : read_data_2;
@@ -323,19 +328,35 @@ void Processor::pipelined_wb(){
 }
 
 void Processor::detect_data_hazard(control_t *ctrl){
-
+	//EX/MEM forward -> EX
 	if (prevState.exeMem.control.reg_write &&
 		(prevState.exeMem.rd == prevState.decExe.rs) &&
 		prevState.exeMem.rd != 0 &&  // rd is not zero
 		prevState.decExe.rs != 0)	// rs is not zero
 			ctrl->forward_a = 1;
-	
+	//EX/MEM forward -> EX
 	if (prevState.exeMem.control.reg_write &&
 		(prevState.exeMem.rd == prevState.decExe.rt) &&
 		prevState.exeMem.rd != 0 &&  // rd is not zero
 		prevState.decExe.rt != 0)	// rs is not zero
 			ctrl->forward_b = 1;
 
+	//MEM/WB forward -> EX
+	if (prevState.memWrite.control.reg_write &&
+		(prevState.memWrite.write_reg == state.decExe.rs) &&
+		prevState.memWrite.write_reg != 0 &&
+		(prevState.exeMem.rd != state.decExe.rs || prevState.exeMem.control.reg_write == 0) &&  // rd is not zero
+		state.decExe.rs != 0)	// rs is not zero
+			ctrl->forward_a = 2;
+	
+	//MEM/WB forward -> EX
+	if (prevState.memWrite.control.reg_write &&
+		(prevState.memWrite.write_reg == state.decExe.rt) &&
+		prevState.memWrite.write_reg != 0 &&  
+		(prevState.exeMem.rd != state.decExe.rt || prevState.exeMem.control.reg_write == 0) &&  // rd is not zero
+		state.decExe.rt != 0)	// rs is not zero
+			ctrl->forward_b = 2;
+	
 	return;				
 }
 //void detect_control_hazard();
