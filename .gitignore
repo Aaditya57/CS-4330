@@ -36,4 +36,6 @@
 *.swp
 log
 processor
-./bins/*
+bins/
+mips_cpu/processor
+mips_cpu/log
