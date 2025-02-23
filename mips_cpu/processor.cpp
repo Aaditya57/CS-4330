@@ -248,12 +248,13 @@ void Processor::pipelined_execute(){
 	uint32_t read_data_1 = prevState.decExe.read_data_1;
 	uint32_t read_data_2 = prevState.decExe.read_data_2;
 
-	detect_data_hazard(&ctrl);
+	prevState.decExe.forward_a = prevState.decExe.forward_b = 0;
+	detect_data_hazard();
 
 	uint32_t operand_1 = 0;
 	uint32_t operand_2 = 0;
 
-	switch(ctrl.forward_a){
+	switch(prevState.decExe.forward_a){
 		case(0):
 			operand_1 = ctrl.shift ? 
 				prevState.decExe.shamt : read_data_1;
@@ -266,7 +267,7 @@ void Processor::pipelined_execute(){
 			break;
 	}
 
-	switch(ctrl.forward_b){
+	switch(prevState.decExe.forward_b){
 		case(0):
 			operand_2 = ctrl.ALU_src ? imm : read_data_2;
 			break;	
@@ -294,6 +295,7 @@ void Processor::pipelined_execute(){
 	//state.exeMem.imm = prevState.decExe.imm;
 	state.exeMem.addr = prevState.decExe.addr;
 }
+
 
 void Processor::pipelined_mem(){
 	control_t &ctrl = prevState.exeMem.control;
@@ -342,21 +344,21 @@ void Processor::pipelined_wb(){
 			ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
 }
 
-void Processor::detect_data_hazard(control_t *ctrl){
+void Processor::detect_data_hazard(){
 	//EX/MEM forward -> EX
 	if (prevState.exeMem.control.reg_write &&
 		((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rs) ||  // R-type
 	 	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rs)) &&  // I-type
 		(prevState.exeMem.rd != 0 || prevState.exeMem.rt != 0) &&  // destination reg is not zero
 		prevState.decExe.rs != 0)  // source reg is not zero
-			ctrl->forward_a = 1;		
+			prevState.decExe.forward_a = 1;		
 
 	if (prevState.exeMem.control.reg_write &&
 		((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rt) ||  // R-type
 	 	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rt)) &&  // I-type
 		(prevState.exeMem.rd != 0 || prevState.exeMem.rt != 0) &&
 		prevState.decExe.rt != 0)
-			ctrl->forward_b = 1;	
+			prevState.decExe.forward_b = 1;	
 
 	//MEM/WB forward -> EX
 	if (prevState.memWrite.control.reg_write &&
@@ -368,7 +370,7 @@ void Processor::detect_data_hazard(control_t *ctrl){
 	  	((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rs) ||
 	   	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rs)))) &&
 		prevState.decExe.rs != 0)
-			ctrl->forward_a = 2;
+			prevState.decExe.forward_a = 2;
 
 	//MEM/WB forward -> EX 
 	if (prevState.memWrite.control.reg_write &&
@@ -380,7 +382,7 @@ void Processor::detect_data_hazard(control_t *ctrl){
 	  	((prevState.exeMem.control.reg_dest && prevState.exeMem.rd == prevState.decExe.rt) ||
 	   	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rt)))) &&
 		prevState.decExe.rt != 0)
-			ctrl->forward_b = 2;	
+			prevState.decExe.forward_b = 2;	
 
 	//load/use hazard handling
 	if ((prevState.decExe.control.mem_read &&

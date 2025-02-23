@@ -4,6 +4,8 @@
 #include "control.h"
 
 class Processor {
+    //forwarding unit
+	               
     private:
 	unsigned int stall = 0;
         int opt_level;
@@ -20,6 +22,9 @@ class Processor {
 	};
    
 	struct ID_EX{
+		uint32_t forward_a;
+	    	uint32_t forward_b;
+
 		int opcode;
 		int rs, rt, rd;
 
@@ -35,6 +40,7 @@ class Processor {
     
 
 	struct EX_MEM{
+		
 		uint32_t imm; //persits imm from previous stage
 
 		uint32_t read_data_1, read_data_2; //persist from prev stage
@@ -73,13 +79,12 @@ class Processor {
 
 	pipelineState state;
 	pipelineState prevState; //store the previous state so we can simulate shared state across contexts
-
-
+	
         // add private functions
         void single_cycle_processor_advance();
         void pipelined_processor_advance();
 
-	void detect_data_hazard(control_t*);
+	void detect_data_hazard();
 	void detect_control_hazard();
  
     public:
