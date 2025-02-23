@@ -171,7 +171,9 @@ void Processor::pipelined_fetch(){
 
 void Processor::pipelined_decode(){
 	if (stall > 0){
-		cout << "decode stall is: " << stall << "\n";
+		state.decExe.control.mem_read = 
+		state.decExe.control.mem_to_reg = 
+		state.decExe.control.reg_write = 0;		
 		stall--;
 		return;
 	}
@@ -180,9 +182,9 @@ void Processor::pipelined_decode(){
 	uint32_t instruction = prevState.fetchDecode.instruction;
 	//DEBUG(control.print());
 
-		control_t new_control;
-		new_control.decode(instruction);
-		state.decExe.control = new_control; //push generated control signals to next pipeline reg
+	control_t new_control;
+	new_control.decode(instruction);
+	state.decExe.control = new_control; //push generated control signals to next pipeline reg
 
 /*	*	*	*	*	*	*	*	*	*	*	*	*\
 *	bool reg_dest;		   // 0 if rt, 1 if rd
@@ -380,10 +382,6 @@ void Processor::detect_data_hazard(control_t *ctrl){
 		prevState.decExe.rt != 0)
 			ctrl->forward_b = 2;	
 
-/*		mem_read = 1;
-                mem_to_reg = 1;
-                reg_write = 1;
-*/	
 	//load/use hazard handling
 	if ((prevState.decExe.control.mem_read &&
 		prevState.decExe.control.mem_to_reg &&
