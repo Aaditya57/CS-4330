@@ -27,7 +27,8 @@ class Processor {
 		uint32_t addr; //address value
 
 		uint32_t read_data_1, read_data_2; //product of
-						   //reg reads
+	
+		control_t control; //preserve control across signals cycles
 	};
     
 
@@ -40,6 +41,9 @@ class Processor {
 		uint32_t alu_zero; //same
 		uint32_t addr; //address for mem access
 		uint32_t alu_result;
+		
+		control_t control; //preserve control across signals cycles
+
 	};
 	
 	struct MEM_WB{
@@ -51,6 +55,8 @@ class Processor {
 		uint32_t alu_zero;
 		uint32_t read_data_1, read_data_2;
 		
+		control_t control; //preserve control across signals cycles
+	
 	};
 	
 	//allow access to correct pipeline registers across
