@@ -5,6 +5,7 @@
 
 class Processor {
     private:
+	unsigned int stall = 0;
         int opt_level;
         ALU alu;
         control_t control;

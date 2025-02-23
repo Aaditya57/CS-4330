@@ -156,6 +156,12 @@ void Processor::single_cycle_processor_advance() {
 }
 
 void Processor::pipelined_fetch(){
+	if (stall > 0){
+		cout << "fetch stall is: " << stall << "\n";
+		stall--;
+		return;
+	}
+	
 	memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0);
 	DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
 	
@@ -164,6 +170,12 @@ void Processor::pipelined_fetch(){
 }
 
 void Processor::pipelined_decode(){
+	if (stall > 0){
+		cout << "decode stall is: " << stall << "\n";
+		stall--;
+		return;
+	}
+
 	// decode into contol signals (see below)
 	uint32_t instruction = prevState.fetchDecode.instruction;
 	//DEBUG(control.print());
@@ -367,6 +379,18 @@ void Processor::detect_data_hazard(control_t *ctrl){
 	   	(!prevState.exeMem.control.reg_dest && prevState.exeMem.rt == prevState.decExe.rt)))) &&
 		prevState.decExe.rt != 0)
 			ctrl->forward_b = 2;	
+
+/*		mem_read = 1;
+                mem_to_reg = 1;
+                reg_write = 1;
+*/	
+	//load/use hazard handling
+	if ((prevState.decExe.control.mem_read &&
+		prevState.decExe.control.mem_to_reg &&
+		prevState.decExe.control.reg_write) &&
+		(prevState.decExe.rd == state.decExe.rs)&&
+		(stall == 0))
+			stall = 4;
 	return;				
 }
 //void detect_control_hazard();
