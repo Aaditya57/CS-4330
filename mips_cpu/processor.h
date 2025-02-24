@@ -125,7 +125,7 @@ class Processor {
 	}
 
 	int get_forwarding_a(){
-		if (!prevState.decExe.rs || !prevState.decExe.rd)
+		if (!prevState.decExe.rs)
 			return 0;
 
 		//Forward from MEM stage
@@ -135,17 +135,21 @@ class Processor {
 			(prevState.exeMem.rd == prevState.decExe.rs))){  //R type
 				return 1; //forward from mem
 		} 
+		if (prevState.memWrite.control.reg_write &&
+			(prevState.memWrite.write_reg == prevState.decExe.rs))
+				return 2;
 
+/*
 		if (prevState.memWrite.control.reg_write &&
 			(prevState.memWrite.write_reg == prevState.decExe.rs) &&
 			((prevState.exeMem.rd != prevState.decExe.rs) || (!prevState.exeMem.control.reg_write)))
 				return 2;
-	
+*/	
 		return 0; //base case, no forwarding required
 	}
 
 	int get_forwarding_b(){
-		if (!prevState.decExe.rt || !prevState.decExe.rd)
+		if (!prevState.decExe.rt || prevState.decExe.control.ALU_src)
 			return 0;
 
 		//Forward from MEM stage
@@ -156,10 +160,14 @@ class Processor {
 
 		//Forward from WB stage
 		if (prevState.memWrite.control.reg_write &&
+			(prevState.memWrite.write_reg == prevState.decExe.rt))
+				return 2;
+/*
+		if (prevState.memWrite.control.reg_write &&
 			(prevState.memWrite.write_reg == prevState.decExe.rt) &&
 			((prevState.exeMem.rd != prevState.decExe.rt) || (!prevState.exeMem.control.reg_write)))
 				return 2;
-
+*/
 		return 0;
 	}
 
@@ -177,8 +185,8 @@ class Processor {
 		if (control.jump) {  // j, jal instructions
 			clear_ifid_idex();
 	
-			regfile.pc = ctrl.jump_reg ? prevState.memWrite.read_data_1 : 
-				ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
+			regfile.pc = control.jump_reg ? prevState.memWrite.read_data_1 : 
+				control.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
 					
 		}	
 	}	

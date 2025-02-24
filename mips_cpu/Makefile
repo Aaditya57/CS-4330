@@ -13,7 +13,6 @@ all: $(EXE_NAME)
 
 $(EXE_NAME): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^;
-	echo test;
 
 processor.o: regfile.h ALU.h control.h processor.h
 memory.o: memory.h
