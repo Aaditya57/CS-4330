@@ -23,7 +23,7 @@ struct control_t {
     bool ALU_src;            // 0 if second operand is from reg_file, 1 if imm
     bool reg_write;          // 1 if need to write back to reg file
     bool zero_extend;        // 1 if immediate needs to be zero-extended
-        
+    
     void print() {      // Prints the generated contol signals
         cout << "REG_DEST: " << reg_dest << "\n";
         cout << "JUMP: " << jump << "\n";
@@ -51,7 +51,8 @@ struct control_t {
         byte = 0;              
         ALU_src = 0;           
         reg_write = 0;          
-        zero_extend = 0;   
+        zero_extend = 0;        
+
     }
     // Decode instructions into control signals
     void decode(uint32_t instruction) {
