@@ -157,10 +157,9 @@ void Processor::single_cycle_processor_advance() {
 }
 
 void Processor::pipelined_fetch(){
-	if (stall > 0){
-		state.fetchDecode = state.fetchDecode;
-		stall--;
-		return;
+	if (stall){
+		state.fetchDecode.instruction = 0;
+		return;	
 	}
 	
 	while (!memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0)){}
@@ -171,15 +170,11 @@ void Processor::pipelined_fetch(){
 }
 
 void Processor::pipelined_decode(){
-	if (stall > 0){
-		state.decExe.control.mem_read = 
-		state.decExe.control.mem_to_reg = 
-		state.decExe.control.reg_write = 0;	
-		state.decExe = state.decExe;	
+	if (stall){
+		state.fetchDecode = prevState.fetchDecode;
 		stall--;
 		return;
 	}
-
 	// decode into contol signals (see below)
 	uint32_t instruction = prevState.fetchDecode.instruction;
 	//DEBUG(control.print());
@@ -229,7 +224,7 @@ void Processor::pipelined_decode(){
 	state.decExe.read_data_1 = read_data_1;
 	state.decExe.read_data_2 = read_data_2; //both of these should have been populated from the reg read
 
-	//detect_data_hazard();
+	detect_data_hazard();
 }
 
 void Processor::pipelined_execute(){

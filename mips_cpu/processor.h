@@ -111,18 +111,17 @@ class Processor {
 	pipelineState prevState; //store the previous state so we can simulate shared state across contexts
 	
 		//add private functions
-		void single_cycle_processor_advance();
-		void pipelined_processor_advance();
+	void single_cycle_processor_advance();
+	void pipelined_processor_advance();
 
 	void detect_data_hazard(){
 		//detect load/use
 		if (prevState.decExe.control.mem_read && 
 			((prevState.decExe.rt == state.decExe.rs) || 
 		 	(prevState.decExe.rt == state.decExe.rt))){
-				stall = 2; //load use requires stall of one cycle, check stall logic
+				stall = 1; //load use requires stall of one cycle, check stall logic
 				return;
 		}
-		stall = 0;
 	}
 
 	int get_forwarding_a(){
@@ -165,17 +164,23 @@ class Processor {
 	}
 
 	void detect_control_hazard(control_t control){
-	    if (control.branch || control.bne){
-        	// Clear fetch/decode and decode/execute pipeline registers
-       		clear_ifid_idex();	
-		cout << "pre branch pc: " << regfile.pc << "\n";
-		cout << "imm: " << state.exeMem.imm << "\n";
+		if (control.branch || control.bne){
+			// Clear fetch/decode and decode/execute pipeline registers
+	   		clear_ifid_idex();	
+		
 		regfile.pc += (control.branch && !control.bne && state.exeMem.alu_zero) || 
 			(control.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0; 
-		cout << "post branch pc: " << regfile.pc << "\n";
 
 		regfile.pc -= 8; //account for pc increments in the past two cycles which will be flushed
-    		}
+		}
+
+		if (control.jump) {  // j, jal instructions
+			clear_ifid_idex();
+	
+			regfile.pc = ctrl.jump_reg ? prevState.memWrite.read_data_1 : 
+				ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
+					
+		}	
 	}	
  
 	public:
