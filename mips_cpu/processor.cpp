@@ -315,6 +315,7 @@ void Processor::pipelined_execute(){
 
 
 	//logic to take care of updating values read from register in case of forwarding
+	//don't remember why this works, but its necessary
 	if (get_forwarding_a() != 0) {
 		state.exeMem.read_data_1 = operand_1;  //Use forwarded value
 	} else {
@@ -327,7 +328,6 @@ void Processor::pipelined_execute(){
 	} else {
 		state.exeMem.read_data_2 = prevState.decExe.read_data_2;  //Use original value
 	}
-	
 	//send updated values down the pipeline
 	//state.exeMem.read_data_1 = prevState.decExe.read_data_1;
 	//state.exeMem.read_data_2 = prevState.decExe.read_data_2;
