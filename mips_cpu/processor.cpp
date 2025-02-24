@@ -161,8 +161,12 @@ void Processor::pipelined_fetch(){
 		//state.fetchDecode.instruction = 0;
 		return;	
 	}
-	
-	while (!memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0)){}
+	bool cache_access_successful = memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0);
+	if (!cache_access_successful) {
+		stall = 60;  // Set stall for 60 cycles
+		return;  // Exit the stage, preventing further processing
+	}	
+
 	DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
 	
 	//increment pc
@@ -352,7 +356,11 @@ void Processor::pipelined_mem(){
 
 	//Memory
 	//First read no matter whether it is a load or a store
-	while(!memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0)){}
+	bool cache_access_successful = memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0);
+	if (!cache_access_successful) {
+		stall = 60;  
+		return;  
+	}
 	
 	//Stores: sb or sh mask and preserve original leftmost bits
 
@@ -363,7 +371,12 @@ void Processor::pipelined_mem(){
 					prevState.exeMem.read_data_2;  //not populating correctly
 	
 	//Write to memory only if mem_write is 1, i.e store
-	while(!memory->access(prevState.exeMem.alu_result, read_data_mem, write_data_mem, ctrl.mem_read, ctrl.mem_write)){}
+	cache_access_successful = memory->access(prevState.exeMem.alu_result, read_data_mem, write_data_mem, ctrl.mem_read, ctrl.mem_write);
+	if (!cache_access_successful) {
+		stall = 60;  
+		return;  
+	}
+
 	//Loads: lbu or lhu modify read data by masking
 	read_data_mem &= ctrl.halfword ? 0xffff : ctrl.byte ? 0xff : 0xffffffff;
 
