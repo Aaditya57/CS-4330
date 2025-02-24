@@ -395,18 +395,18 @@ void Processor::detect_data_hazard(){
 			stall = 4;
 	return;				
 }
-
+/*
 void Processor::detect_control_hazard(){
 	control_t ctrl = state.exeMem.control;
 	
 	if ((ctrl.branch || ctrl.bne) || //ctrl.bne &&
-	    (ctrl.ALU_op == 1)){
+		(ctrl.ALU_op == 1)){
 	
 		//regfile.pc -= 4;	
 		//logic from writeback stage, now used to update pc for branching
 		cout << "pc: " << regfile.pc << "\n";
 		regfile.pc += (ctrl.branch && !ctrl.bne && state.exeMem.alu_zero) ||
-              		(ctrl.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0;
+			  		(ctrl.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0;
 		
 		regfile.pc -= 8; //magic number :)
 		//regfile.pc = 24;
@@ -421,6 +421,24 @@ void Processor::detect_control_hazard(){
 	return;
 }
 
+*/
+void Processor::detect_control_hazard(){
+	control_t ctrl = state.exeMem.control;
+	
+	if ((ctrl.branch || ctrl.bne) && (ctrl.ALU_op == 1)){
+		//cout << "pc: " << regfile.pc << "\n";
+		regfile.pc += (ctrl.branch && !ctrl.bne && state.exeMem.alu_zero) ||
+					 (ctrl.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0;
+		
+		regfile.pc -= 8; //Adjust PC
+		//cout << "jump pc: " << regfile.pc << "\n";
+
+		//flush out old state
+		state.fetchDecode = IF_ID{};
+		state.decExe = ID_EX{};
+		
+	}
+}
 
 void Processor::pipelined_processor_advance() {
 	//state = prevState; //update the state (regs) to contrain the state from the previous cycle
