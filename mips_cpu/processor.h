@@ -14,17 +14,46 @@ class Processor {
 		Memory *memory;
 		Registers regfile;
 		//add other structures as needed
-
 		//pipelined processor
+
+	void clear_ifid_idex(){
+		state.fetchDecode.instruction = 0;
+		state.decExe.opcode = 0;
+		state.decExe.rs = 0;
+		state.decExe.rt = 0;
+		state.decExe.rd = 0;
+		state.decExe.shamt = 0;
+		state.decExe.funct = 0;
+		state.decExe.imm = 0;
+		state.decExe.addr = 0;
+		state.decExe.read_data_1 = 0;
+		state.decExe.read_data_2 = 0;
+
+		prevState.fetchDecode.instruction = 0;
+		prevState.decExe.opcode = 0;
+		prevState.decExe.rs = 0;
+		prevState.decExe.rt = 0;
+		prevState.decExe.rd = 0;
+		prevState.decExe.shamt = 0;
+		prevState.decExe.funct = 0;
+		prevState.decExe.imm = 0;
+		prevState.decExe.addr = 0;
+		prevState.decExe.read_data_1 = 0;
+		prevState.decExe.read_data_2 = 0;
+
+		prevState.decExe.control.reset();
+		state.decExe.control.reset();
+	}
+	
 
 	struct IF_ID{
 		uint32_t instruction; //obvious
-		uint32_t pc;
+		//uint32_t pc;
 	};
    
 	struct ID_EX{
-		uint32_t forward_a;
-			uint32_t forward_b;
+		//uint32_t forward_a;
+		//uint32_t forward_b;
 
 		int opcode;
 		int rs, rt, rd;
@@ -135,8 +164,19 @@ class Processor {
 		return 0;
 	}
 
+	void detect_control_hazard(control_t control){
+	    if (control.branch || control.bne){
+        	// Clear fetch/decode and decode/execute pipeline registers
+       		clear_ifid_idex();	
+		cout << "pre branch pc: " << regfile.pc << "\n";
+		cout << "imm: " << state.exeMem.imm << "\n";
+		regfile.pc += (control.branch && !control.bne && state.exeMem.alu_zero) || 
+			(control.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0; 
+		cout << "post branch pc: " << regfile.pc << "\n";
 
-	void detect_control_hazard();
+		regfile.pc -= 8; //account for pc increments in the past two cycles which will be flushed
+    		}
+	}	
  
 	public:
 		Processor(Memory *mem) { regfile.pc = 0; memory = mem;}

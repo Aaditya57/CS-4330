@@ -289,11 +289,11 @@ void Processor::pipelined_execute(){
 			operand_2 = prevState.memWrite.write_data;	
 			break;
 	}
-	cout << "op 1: " << operand_1 << "\n";
+	//cout << "op 1: " << operand_1 << "\n";
 
-	cout << "op 2: " << operand_2 << "\n";
+	//cout << "op 2: " << operand_2 << "\n";
 
-	cout << "destination is: " << prevState.decExe.rd << "\n";
+	//cout << "destination is: " << prevState.decExe.rd << "\n";
 
 	//state.exeMem.operand_2 = ctrl.ALU_src ? imm : read_data_2;
 	uint32_t alu_zero = 0;
@@ -311,7 +311,7 @@ void Processor::pipelined_execute(){
 	//state.exeMem.imm = prevState.decExe.imm;
 	state.exeMem.addr = prevState.decExe.addr;
 
-//	detect_control_hazard();
+	detect_control_hazard(ctrl);
 }
 
 
@@ -355,8 +355,8 @@ void Processor::pipelined_wb(){
 			ctrl.reg_write, prevState.memWrite.write_data);
 	
 	// Update PC
-	regfile.pc += (ctrl.branch && !ctrl.bne && prevState.memWrite.alu_zero) || 
-			(ctrl.bne && !prevState.memWrite.alu_zero) ? prevState.memWrite.imm << 2 : 0; 
+	//regfile.pc += (ctrl.branch && !ctrl.bne && prevState.memWrite.alu_zero) || 
+	//		(ctrl.bne && !prevState.memWrite.alu_zero) ? prevState.memWrite.imm << 2 : 0;  replaced by hazard detection
 
 	regfile.pc = ctrl.jump_reg ? prevState.memWrite.read_data_1 : 
 			ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
