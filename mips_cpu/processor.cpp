@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <iostream>
 #include "processor.h"
+//#include "control.h"
 using namespace std;
 
 #ifdef ENABLE_DEBUG
@@ -157,7 +158,6 @@ void Processor::single_cycle_processor_advance() {
 
 void Processor::pipelined_fetch(){
 	if (stall > 0){
-		cout << "fetch stall is: " << stall << "\n";
 		stall--;
 		return;
 	}
@@ -294,6 +294,8 @@ void Processor::pipelined_execute(){
 	state.exeMem.alu_zero = alu_zero;
 	//state.exeMem.imm = prevState.decExe.imm;
 	state.exeMem.addr = prevState.decExe.addr;
+
+	detect_control_hazard();
 }
 
 
@@ -393,7 +395,31 @@ void Processor::detect_data_hazard(){
 			stall = 4;
 	return;				
 }
-//void detect_control_hazard();
+
+void Processor::detect_control_hazard(){
+	control_t ctrl = state.exeMem.control;
+	
+	if ((ctrl.branch || ctrl.bne) || //ctrl.bne &&
+	    (ctrl.ALU_op == 1)){
+	
+		//regfile.pc -= 4;	
+		//logic from writeback stage, now used to update pc for branching
+		cout << "pc: " << regfile.pc << "\n";
+		regfile.pc += (ctrl.branch && !ctrl.bne && state.exeMem.alu_zero) ||
+              		(ctrl.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0;
+		
+		regfile.pc -= 8; //magic number :)
+		//regfile.pc = 24;
+		cout << "jump pc: " << regfile.pc << "\n";
+
+		//dump uneeded pipelines
+		state.decExe = prevState.decExe = ID_EX{};
+		prevState.fetchDecode = state.fetchDecode = IF_ID{};
+		state.exeMem = EX_MEM{};
+	}
+			
+	return;
+}
 
 
 void Processor::pipelined_processor_advance() {

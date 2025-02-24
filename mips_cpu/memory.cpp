@@ -146,6 +146,7 @@ bool Memory::access(uint32_t address, uint32_t &read_data, uint32_t write_data, 
 //    if (opt_level == 0) {
         if (mem_read) {
             read_data = mem[address/4];
+	    cout << "read memory is: " << read_data << "\n";
         }
         if (mem_write) {
             mem[address/4] = write_data;

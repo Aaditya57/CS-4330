@@ -113,5 +113,7 @@ class Processor {
 	void pipelined_mem();
 
 	void pipelined_wb();
+
+	void flush_pipeline();
 	
 };
