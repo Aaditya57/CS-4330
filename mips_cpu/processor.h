@@ -8,13 +8,16 @@ class Processor {
 				   
 	private:
 	unsigned int stall = 0; 
-		int opt_level;
-		ALU alu;
-		control_t control;
-		Memory *memory;
-		Registers regfile;
-		//add other structures as needed
-		//pipelined processor
+	unsigned int cache_penalty_mem = 0;
+	unsigned int cache_penalty_fetch = 0;
+
+	int opt_level;
+	ALU alu;
+	control_t control;
+	Memory *memory;
+	Registers regfile;
+	//add other structures as needed
+	//pipelined processor
 
 	void clear_ifid_idex(){
 		state.fetchDecode.instruction = 0;
@@ -44,8 +47,8 @@ class Processor {
 		prevState.decExe.control.reset();
 		state.decExe.control.reset();
 	}
-	
 
+			
 	struct IF_ID{
 		uint32_t instruction; //obvious
 		//uint32_t pc;
@@ -172,25 +175,60 @@ class Processor {
 	}
 
 	void detect_control_hazard(control_t control){
-		if (control.branch || control.bne){
-			// Clear fetch/decode and decode/execute pipeline registers
-	   		clear_ifid_idex();	
+	if (control.branch || control.bne){
+		// Explicit branch condition check
+		bool branch_taken = false;
 		
-		regfile.pc += (control.branch && !control.bne && state.exeMem.alu_zero) || 
-			(control.bne && !state.exeMem.alu_zero) ? state.exeMem.imm << 2 : 0; 
+		if (control.branch && !control.bne) {
+			// BEQ (Branch if Equal)
+			branch_taken = (state.exeMem.alu_zero == 1);
+		} else if (control.bne) {
+			// BNE (Branch if Not Equal)
+			branch_taken = (state.exeMem.alu_zero == 0);
+		}
+		
+		if (branch_taken) {
+			// Clear fetch/decode and decode/execute pipeline registers
+			clear_ifid_idex();	
+		
+			regfile.pc += state.exeMem.imm << 2; 
+			regfile.pc -= 8; // account for pc increments in the past two cycles which will be flushed
+		}
+	}
 
-		regfile.pc -= 8; //account for pc increments in the past two cycles which will be flushed
+	if (control.jump) {  // j, jal instructions
+		clear_ifid_idex();
+
+		regfile.pc = control.jump_reg ? prevState.memWrite.read_data_1 : 
+			control.jump ? (regfile.pc & 0xf0000000) | (prevState.memWrite.addr << 2) : regfile.pc;
+	}	
+}
+
+/*
+	void detect_control_hazard(control_t control){
+		if (control.branch || control.bne){
+		// Check actual branch condition
+			bool branch_taken = (control.branch && !control.bne && state.exeMem.alu_zero) || 
+							(control.bne && !state.exeMem.alu_zero);
+		
+			if (branch_taken) {
+				// Clear fetch/decode and decode/execute pipeline registers
+				clear_ifid_idex();	
+		
+				regfile.pc += state.exeMem.imm << 2; 
+				regfile.pc -= 8; // account for pc increments in the past two cycles which will be flushed
+			}
 		}
 
 		if (control.jump) {  // j, jal instructions
 			clear_ifid_idex();
-	
+
 			regfile.pc = control.jump_reg ? prevState.memWrite.read_data_1 : 
 				control.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
-					
 		}	
-	}	
- 
+	}
+
+*/
 	public:
 		Processor(Memory *mem) { regfile.pc = 0; memory = mem;}
 
@@ -219,5 +257,44 @@ class Processor {
 		void pipelined_wb();
 
 		void flush_pipeline();
-	
+		void print(){
+		cout << "IF_ID" << "\n";
+		cout << "instruction: " << state.fetchDecode.instruction << "\n";
+		
+		cout << "ID_EX" << "\n";
+		cout << "opcode: " << state.decExe.opcode << "\n";
+		cout << "rs: " << state.decExe.rs << "\n";
+		cout << "rt: " << state.decExe.rt << "\n";
+		cout << "rd: " << state.decExe.rd << "\n";
+		cout << "shamt: " << state.decExe.shamt << "\n";	
+		cout << "funct: " << state.decExe.funct << "\n";
+		cout << "imm: " << state.decExe.imm << "\n";
+		cout << "addr: " << state.decExe.addr << "\n";
+		cout << "read_data_1: " << state.decExe.read_data_1 << "\n";
+		cout << "read_data_2: " << state.decExe.read_data_2 << "\n";
+
+		cout << "EX_MEM" << "\n";
+		cout << "imm: " << state.exeMem.imm << "\n";
+		cout << "read_data_1: " << state.exeMem.read_data_1 << "\n";
+		cout << "read_data_2: " << state.exeMem.read_data_2 << "\n";
+		cout << "rd: " << state.exeMem.rd << "\n";
+		cout << "rt: " << state.exeMem.rt << "\n";
+		cout << "operand_1: " << state.exeMem.operand_1 << "\n";
+		cout << "operand_2: " << state.exeMem.operand_2 << "\n";
+		cout << "alu_zero: " << state.exeMem.alu_zero << "\n";
+		cout << "addr: " << state.exeMem.addr << "\n";
+		cout << "alu_result: " << state.exeMem.alu_result << "\n";
+
+		cout << "MEM_WB" << "\n";
+		cout << "write_reg: " << state.memWrite.write_reg << "\n";
+		cout << "write_data: " << state.memWrite.write_data << "\n";
+		cout << "imm: " << state.memWrite.imm << "\n";
+		cout << "addr: " << state.memWrite.addr << "\n";
+		cout << "alu_zero: " << state.memWrite.alu_zero << "\n";
+		cout << "read_data_1: " << state.memWrite.read_data_1 << "\n";
+		cout << "read_data_2: " << state.memWrite.read_data_2 << "\n";
+	}
+
+		
 	};
+
