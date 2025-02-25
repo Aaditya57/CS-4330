@@ -162,7 +162,29 @@ void Processor::pipelined_fetch(){
 		return;	
 	}
 	
-	while (!memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0)){}
+	if (cache_penalty_mem > 0) {
+		state.fetchDecode.instruction = 0;  // NOP
+		return;
+	}
+
+	// Ongoing fetch penalty
+	if (cache_penalty_fetch) {
+		bool read = memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0);
+		if (read){	
+			cache_penalty_fetch--;
+			return;
+		}else{
+			state.fetchDecode.instruction = 0;  // NOP
+			return;
+		}
+	}
+	
+	bool cache_access_successful = memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0);
+	if (!cache_access_successful) {
+		cache_penalty_fetch = 1;  // Set stall for 60 cycles
+		return;  // Exit the stage, preventing further processing
+	}	
+
 	DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
 	
 	//increment pc
@@ -173,6 +195,11 @@ void Processor::pipelined_decode(){
 	if (stall){
 		state.decExe.control.reset();
 		stall--;
+		return;
+	}
+
+	if (cache_penalty_mem){
+		state.exeMem.control.reset();
 		return;
 	}
 	
@@ -246,6 +273,11 @@ void Processor::pipelined_decode(){
 }
 
 void Processor::pipelined_execute(){
+	if (cache_penalty_mem){
+		state.exeMem.control.reset();
+		return;
+	}
+
 	control_t &ctrl = prevState.decExe.control; //pull control signals from last reg
 	state.exeMem.control = ctrl; //...and pass them along
 
@@ -350,9 +382,27 @@ void Processor::pipelined_mem(){
 	uint32_t read_data_mem = 0;
 	uint32_t write_data_mem = 0;
 
+
+	if (cache_penalty_mem){
+		bool read = memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0);
+		if (read){
+			cache_penalty_mem--;
+			return;
+		}else{
+			state.memWrite.control.reset();
+			cache_penalty_mem--;
+			return;
+		}
+	}
+
+	
 	//Memory
 	//First read no matter whether it is a load or a store
-	while(!memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0)){}
+	bool cache_access_successful = memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0);
+	if (!cache_access_successful) {
+		cache_penalty_mem = 1;  
+		return;  
+	}
 	
 	//Stores: sb or sh mask and preserve original leftmost bits
 
@@ -363,7 +413,14 @@ void Processor::pipelined_mem(){
 					prevState.exeMem.read_data_2;  //not populating correctly
 	
 	//Write to memory only if mem_write is 1, i.e store
-	while(!memory->access(prevState.exeMem.alu_result, read_data_mem, write_data_mem, ctrl.mem_read, ctrl.mem_write)){}
+	memory->access(prevState.exeMem.alu_result, read_data_mem, write_data_mem, ctrl.mem_read, ctrl.mem_write);
+	/*	
+	if (!cache_access_successful) {
+		cache_penalty_mem_write = 60;  
+		return;  
+	}
+	*/ //shouldnt miss on a write
+
 	//Loads: lbu or lhu modify read data by masking
 	read_data_mem &= ctrl.halfword ? 0xffff : ctrl.byte ? 0xff : 0xffffffff;
 
@@ -393,16 +450,41 @@ void Processor::pipelined_wb(){
 			ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
 }
 
+void Processor::pipelined_processor_advance(){
+	static uint64_t cycle_count = 0;
+	cycle_count++;
+
+	// Debug print
+/* cout << "CYCLE " << cycle_count 
+		 << " PC: " << hex << regfile.pc << dec
+		 << " Fetch Penalty: " << cache_penalty_fetch 
+		 << " Mem Penalty: " << cache_penalty_mem 
+		 << " Stall: " << stall << endl;
+
+	// Abort if we've gone too long (prevents true infinite loop)
+	if (cycle_count > 20000) {
+		cout << "POTENTIAL INFINITE LOOP DETECTED. ABORTING." << endl;
+		exit(1);
+	} */
+
+	prevState = state;
+
+	pipelined_wb();	 
+	pipelined_mem();	
+	pipelined_execute();
+	pipelined_decode();
+	pipelined_fetch(); 
+}
+/*
 void Processor::pipelined_processor_advance() {
 	//detect_data_hazard();
 	prevState = state;
 
 	pipelined_wb(); //try writing back before anything to resolve decode data hazards
-
-	pipelined_fetch();
-	pipelined_decode();
-	pipelined_execute();
 	pipelined_mem();
-	//pipelined_wb();
+	pipelined_execute();
+	pipelined_decode();
+	pipelined_fetch();
 }
+*/
 
