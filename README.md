@@ -10,5 +10,7 @@ Status:
     -WIP optimization: pipelining (cont.)
 
 Known issues to fix:
+    -weird issue with data not writing to correct (or any) registers some times
+    
   
-    -none currently, more testing needed
+
