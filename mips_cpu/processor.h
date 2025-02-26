@@ -3,14 +3,14 @@
 #include "ALU.h"
 #include "control.h"
 
-class Processor {
+class Processor{
 	//forwarding unit
-				   
+					
 	private:
-	unsigned int stall = 0; 
+	bool stall = false; 
 	unsigned int cache_penalty_mem = 0;
 	unsigned int cache_penalty_fetch = 0;
-
+	int fetchMisses;
 	int opt_level;
 	ALU alu;
 	control_t control;
@@ -19,45 +19,11 @@ class Processor {
 	//add other structures as needed
 	//pipelined processor
 
-	void clear_ifid_idex(){
-		state.fetchDecode.instruction = 0;
-		state.decExe.opcode = 0;
-		state.decExe.rs = 0;
-		state.decExe.rt = 0;
-		state.decExe.rd = 0;
-		state.decExe.shamt = 0;
-		state.decExe.funct = 0;
-		state.decExe.imm = 0;
-		state.decExe.addr = 0;
-		state.decExe.read_data_1 = 0;
-		state.decExe.read_data_2 = 0;
-
-		prevState.fetchDecode.instruction = 0;
-		prevState.decExe.opcode = 0;
-		prevState.decExe.rs = 0;
-		prevState.decExe.rt = 0;
-		prevState.decExe.rd = 0;
-		prevState.decExe.shamt = 0;
-		prevState.decExe.funct = 0;
-		prevState.decExe.imm = 0;
-		prevState.decExe.addr = 0;
-		prevState.decExe.read_data_1 = 0;
-		prevState.decExe.read_data_2 = 0;
-
-		prevState.decExe.control.reset();
-		state.decExe.control.reset();
-	}
-
-			
 	struct IF_ID{
 		uint32_t instruction; //obvious
-		//uint32_t pc;
 	};
-   
+	
 	struct ID_EX{
-		//uint32_t forward_a;
-		//uint32_t forward_b;
-
 		int opcode;
 		int rs, rt, rd;
 
@@ -78,11 +44,10 @@ class Processor {
 
 		uint32_t read_data_1, read_data_2; //persist from prev stage
 		int rd, rt; //registers
-		uint32_t operand_1, operand_2; //operands from prev stage
+		uint32_t write_data;
 		uint32_t alu_zero; //same
-		uint32_t addr; //address for mem access
 		uint32_t alu_result;
-		
+			
 		control_t control; //preserve control across signals cycles
 
 	};
@@ -92,9 +57,7 @@ class Processor {
 		uint32_t write_data; //data to write
 		
 		uint32_t imm;
-		uint32_t addr;
 		uint32_t alu_zero;
-		uint32_t read_data_1, read_data_2;
 		
 		control_t control; //preserve control across signals cycles
 	
@@ -113,130 +76,120 @@ class Processor {
 	pipelineState state;
 	pipelineState prevState; //store the previous state so we can simulate shared state across contexts
 	
-		//add private functions
+	//add private functions
 	void single_cycle_processor_advance();
 	void pipelined_processor_advance();
-
+	
 	void detect_data_hazard(){
-		//detect load/use
-		if (prevState.decExe.control.mem_read && 
-			((prevState.decExe.rt == state.decExe.rs) || 
-		 	(prevState.decExe.rt == state.decExe.rt))){
-				stall = 1; //load use requires stall of one cycle, check stall logic
+		// detect load/use hazard
+		if (prevState.decExe.control.reg_write && prevState.decExe.control.mem_read){
+			// For I-type instructions - check if source register in decode matches destination in execute
+		  	if (state.decExe.rs == prevState.decExe.rt){
+				stall = true;
 				return;
-		}
+			}
+		  
+		  	// For R-type instructions - check both source registers
+		  	if (state.decExe.rt == prevState.decExe.rt){
+				stall = true;
+				return;
+			}
+	 	}
+	 	return;
 	}
+
+	//possible forwarding unit inputs:
+	//prevState.exeDec.rd
+	//prevState.memWrite.write_reg
+	//prevState.decExe.rs
+	//prevState.decExe.rt
+	//prevState.exeMem.control.reg_write
+	//prevState.memWrite.control.regWrite
+
+	//forwarding notes:
+	//control signal regdest picks between prevState rd and rt, not tied to forwarding
+	//alu_src needs to pick between inputs in exe
 
 	int get_forwarding_a(){
 		if (!prevState.decExe.rs)
-			return 0;
+			return 0;  //use read_data_1
 
 		//Forward from MEM stage
 		if (prevState.exeMem.control.reg_write &&  //reg_write signal set
 			((prevState.exeMem.rt ==  prevState.decExe.rs) || //I type	
-			//prevState.exeMem.rd != 0 && 
 			(prevState.exeMem.rd == prevState.decExe.rs))){  //R type
-				return 1; //forward from mem
+				return 2; //forward from mem
 		} 
 		if (prevState.memWrite.control.reg_write &&
 			(prevState.memWrite.write_reg == prevState.decExe.rs))
-				return 2;
+				return 1;
 
-/*
-		if (prevState.memWrite.control.reg_write &&
-			(prevState.memWrite.write_reg == prevState.decExe.rs) &&
-			((prevState.exeMem.rd != prevState.decExe.rs) || (!prevState.exeMem.control.reg_write)))
-				return 2;
-*/	
 		return 0; //base case, no forwarding required
 	}
 
 	int get_forwarding_b(){
-		if (!prevState.decExe.rt || prevState.decExe.control.ALU_src)
-			return 0;
+		if (!prevState.decExe.rt) //rt changed to rd
+			return 0; //use read_data_2
 
 		//Forward from MEM stage
 		if (prevState.exeMem.control.reg_write &&  //reg_write signal set
-		   	((prevState.exeMem.rt == prevState.decExe.rt) || //I type
-			(prevState.exeMem.rd == prevState.decExe.rt))) //R type
-					return 1; //forward from mem
+				((prevState.exeMem.rt == prevState.decExe.rt) || //I type
+				(prevState.exeMem.rd == prevState.decExe.rt))) //R type
+					return 2; //forward from mem
 
 		//Forward from WB stage
 		if (prevState.memWrite.control.reg_write &&
 			(prevState.memWrite.write_reg == prevState.decExe.rt))
-				return 2;
-/*
-		if (prevState.memWrite.control.reg_write &&
-			(prevState.memWrite.write_reg == prevState.decExe.rt) &&
-			((prevState.exeMem.rd != prevState.decExe.rt) || (!prevState.exeMem.control.reg_write)))
-				return 2;
-*/
+				return 1;
 		return 0;
 	}
 
 	void detect_control_hazard(control_t control){
-	if (control.branch || control.bne){
-		// Explicit branch condition check
-		bool branch_taken = false;
-		
-		if (control.branch && !control.bne) {
-			// BEQ (Branch if Equal)
-			branch_taken = (state.exeMem.alu_zero == 1);
-		} else if (control.bne) {
-			// BNE (Branch if Not Equal)
-			branch_taken = (state.exeMem.alu_zero == 0);
-		}
-		
-		if (branch_taken) {
-			// Clear fetch/decode and decode/execute pipeline registers
-			clear_ifid_idex();	
-		
-			regfile.pc += state.exeMem.imm << 2; 
-			regfile.pc -= 8; // account for pc increments in the past two cycles which will be flushed
-		}
-	}
-
-	if (control.jump) {  // j, jal instructions
-		clear_ifid_idex();
-
-		regfile.pc = control.jump_reg ? prevState.memWrite.read_data_1 : 
-			control.jump ? (regfile.pc & 0xf0000000) | (prevState.memWrite.addr << 2) : regfile.pc;
-	}	
-}
-
-/*
-	void detect_control_hazard(control_t control){
 		if (control.branch || control.bne){
-		// Check actual branch condition
-			bool branch_taken = (control.branch && !control.bne && state.exeMem.alu_zero) || 
-							(control.bne && !state.exeMem.alu_zero);
+			// Explicit branch condition check
+			bool branch_taken = false;
 		
-			if (branch_taken) {
+			if (control.branch && !control.bne){
+				// BEQ (Branch if Equal)
+				branch_taken = (state.exeMem.alu_zero == 1);
+			} else if (control.bne){
+				// BNE (Branch if Not Equal)
+				branch_taken = (state.exeMem.alu_zero == 0);
+			}
+		
+			if (branch_taken){
 				// Clear fetch/decode and decode/execute pipeline registers
-				clear_ifid_idex();	
-		
+				//PROBABLY DOESNT WORK, FIX
+				clear_IF_ID();
+				clear_ID_EX();	
 				regfile.pc += state.exeMem.imm << 2; 
 				regfile.pc -= 8; // account for pc increments in the past two cycles which will be flushed
 			}
 		}
 
-		if (control.jump) {  // j, jal instructions
-			clear_ifid_idex();
-
-			regfile.pc = control.jump_reg ? prevState.memWrite.read_data_1 : 
-				control.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.addr << 2): regfile.pc;
+		if (control.jump){  // j, jal instructions
+	
+			clear_IF_ID();
+			clear_ID_EX();
+			regfile.pc = control.jump_reg ? prevState.memWrite.write_data : 
+					control.jump ? (regfile.pc & 0xf0000000) | (prevState.memWrite.write_data << 2) : regfile.pc;
 		}	
 	}
 
-*/
 	public:
-		Processor(Memory *mem) { regfile.pc = 0; memory = mem;}
+		Processor(Memory *mem){ regfile.pc = 0; memory = mem;}
+
+		uint32_t getPC(){ 
+			uint32_t fake_pc = (regfile.pc > 20) ? regfile.pc -20 : regfile.pc;		
+
+		return fake_pc;
+		}
 
 		//Get PC
-		uint32_t getPC() { return regfile.pc; }
+//		uint32_t getPC(){ return regfile.pc; }
 
 		//Prints the Register File
-		void printRegFile() { regfile.print(); }
+		void printRegFile(){ regfile.print(); }
 		
 		//Initializes the processor appropriately based on the optimization level
 		void initialize(int opt_level);
@@ -257,44 +210,21 @@ class Processor {
 		void pipelined_wb();
 
 		void flush_pipeline();
-		void print(){
-		cout << "IF_ID" << "\n";
-		cout << "instruction: " << state.fetchDecode.instruction << "\n";
 		
-		cout << "ID_EX" << "\n";
-		cout << "opcode: " << state.decExe.opcode << "\n";
-		cout << "rs: " << state.decExe.rs << "\n";
-		cout << "rt: " << state.decExe.rt << "\n";
-		cout << "rd: " << state.decExe.rd << "\n";
-		cout << "shamt: " << state.decExe.shamt << "\n";	
-		cout << "funct: " << state.decExe.funct << "\n";
-		cout << "imm: " << state.decExe.imm << "\n";
-		cout << "addr: " << state.decExe.addr << "\n";
-		cout << "read_data_1: " << state.decExe.read_data_1 << "\n";
-		cout << "read_data_2: " << state.decExe.read_data_2 << "\n";
-
-		cout << "EX_MEM" << "\n";
-		cout << "imm: " << state.exeMem.imm << "\n";
-		cout << "read_data_1: " << state.exeMem.read_data_1 << "\n";
-		cout << "read_data_2: " << state.exeMem.read_data_2 << "\n";
-		cout << "rd: " << state.exeMem.rd << "\n";
-		cout << "rt: " << state.exeMem.rt << "\n";
-		cout << "operand_1: " << state.exeMem.operand_1 << "\n";
-		cout << "operand_2: " << state.exeMem.operand_2 << "\n";
-		cout << "alu_zero: " << state.exeMem.alu_zero << "\n";
-		cout << "addr: " << state.exeMem.addr << "\n";
-		cout << "alu_result: " << state.exeMem.alu_result << "\n";
-
-		cout << "MEM_WB" << "\n";
-		cout << "write_reg: " << state.memWrite.write_reg << "\n";
-		cout << "write_data: " << state.memWrite.write_data << "\n";
-		cout << "imm: " << state.memWrite.imm << "\n";
-		cout << "addr: " << state.memWrite.addr << "\n";
-		cout << "alu_zero: " << state.memWrite.alu_zero << "\n";
-		cout << "read_data_1: " << state.memWrite.read_data_1 << "\n";
-		cout << "read_data_2: " << state.memWrite.read_data_2 << "\n";
-	}
-
-		
-	};
-
+		void clear_ID_EX(){
+			state.decExe.opcode = 0;
+			state.decExe.rs = 0;
+			state.decExe.rt = 0;
+			state.decExe.rd = 0;
+			state.decExe.shamt = 0;
+			state.decExe.funct = 0;
+			state.decExe.imm = 0;
+			state.decExe.addr = 0;
+			state.decExe.read_data_1 = 0;
+			state.decExe.read_data_2 = 0;
+	
+			state.decExe.control.reset();
+		}
+	
+		void clear_IF_ID(){ state.fetchDecode.instruction = 0; }
+};
