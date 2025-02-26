@@ -7,7 +7,7 @@ mkdir -p logs
 cd mips_cpu
 
 # Loop through all .o files in the test_data_pipeline/build/ directory
-for file in ../test_data_pipeline/build/*.o; do
+for file in ../test_data_pipeline/bins/*.o; do
     # Check if the file exists
     if [ -f "$file" ]; then
         # Extract the base filename without path and extension
