@@ -11,6 +11,7 @@ using namespace std;
 #endif
 
 void Processor::initialize(int level) {
+	processor_pc = 0;
 	//Initialize control_t
 	control = {.reg_dest = 0, 
 				.jump = 0,
@@ -32,7 +33,8 @@ void Processor::initialize(int level) {
 	opt_level = level;
 
 	state.fetchDecode = {
-		.instruction = 0
+		.instruction = 0,
+		.pc = 0
 	};
 
 	state.decExe = {
@@ -45,7 +47,8 @@ void Processor::initialize(int level) {
 		.imm = 0,
 		.addr = 0,
 		.read_data_1 = 0,
-		.read_data_2 = 0
+		.read_data_2 = 0,
+		.pc = 0
 	};
 
 	state.exeMem = {
@@ -56,7 +59,8 @@ void Processor::initialize(int level) {
 		.rt = 0,
 		.write_data = 0,
 		.alu_zero = 0,
-		.alu_result = 0
+		.alu_result = 0,
+		.pc = 0
 	};
 
 	state.memWrite = {
@@ -64,9 +68,10 @@ void Processor::initialize(int level) {
 		.write_data = 0,
 		.imm = 0,
 		//.addr = 0,
-		.alu_zero = 0
+		.alu_zero = 0,
 		//.read_data_1 = 0,
 		//.read_data_2 = 0
+		.pc = 0
 	};
 
 	//Initialize prevState to same values
@@ -155,6 +160,8 @@ void Processor::single_cycle_processor_advance() {
 }
 
 void Processor::pipelined_fetch(){
+	cout << "pc: " << processor_pc << "\n";
+
 	if (stall){
 		stall = false;
 		clear_IF_ID();
@@ -163,23 +170,25 @@ void Processor::pipelined_fetch(){
 	
 	if (cache_penalty_mem > 0) {
 		clear_IF_ID();
+		//state.fetchDecode.instruction = 0;  // NOP
 		return;
 	}
 
 	// Ongoing fetch penalty
 	if (cache_penalty_fetch) {
-		bool read = memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0);
+		bool read = memory->access(processor_pc, state.fetchDecode.instruction, 0, 1, 0);
 		if (read){	
 			cache_penalty_fetch--;
 			//return;
 		}else{
 			clear_IF_ID();
+			//state.fetchDecode.instruction = 0;  // NOP
 			return;
 		}
 	}
 	//while(!memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0)){}
-
-	bool cache_access_successful = memory->access(regfile.pc, state.fetchDecode.instruction, 0, 1, 0);
+	
+	bool cache_access_successful = memory->access(processor_pc, state.fetchDecode.instruction, 0, 1, 0);
 	if (!cache_access_successful) {
 		cache_penalty_fetch = 1;  // Set stall for 60 cycles
 		return;  // Exit the stage, preventing further processing
@@ -188,10 +197,18 @@ void Processor::pipelined_fetch(){
 	DEBUG(cout << "\nPC: 0x" << std::hex << regfile.pc << std::dec << "\n");
 	
 	//increment pc
-	regfile.pc += 4; //standard increment
+	state.fetchDecode.pc = processor_pc;
+	processor_pc += 4; //standard increment
 }
 
 void Processor::pipelined_decode(){
+/*	if (stall){  //this is the same as the stall detector below, but this one actually terminates the stall for next cycle
+		stall = false;
+		state.fetchDecode = prevState.fetchDecode;
+		clear_ID_EX();
+		return;
+	}
+*/
 	if (cache_penalty_mem){
 		state.fetchDecode = prevState.fetchDecode;
 		clear_ID_EX(); //flush state.decExe if hazard detected
@@ -263,9 +280,29 @@ void Processor::pipelined_decode(){
 			read_data_2 = prevState.memWrite.write_data;
 	}
 
+	/*if (stall){
+		if (prevState.exeMem.rt == rs)
+			read_data_1 = prevState.exeMem.alu_result;
+		if (prevState.exeMem.rt == rt)
+			read_data_2 = prevState.exeMem.alu_result;
+	}
+	if (prevState.memWrite.control.reg_write && 
+		prevState.memWrite.write_reg != 0) {
+		
+		// Forward for RS
+		if (prevState.memWrite.write_reg == rs) {
+			read_data_1 = prevState.memWrite.write_data;
+		}
+		
+		// Forward for RT
+		if (prevState.memWrite.write_reg == rt) {
+			read_data_2 = prevState.memWrite.write_data;
+		}
+	}
+*/	
 	state.decExe.read_data_1 = read_data_1;
 	state.decExe.read_data_2 = read_data_2; //both of these should have been populated from the reg read
-
+	state.decExe.pc = prevState.fetchDecode.pc;
 }
 
 void Processor::pipelined_execute(){
@@ -293,6 +330,9 @@ void Processor::pipelined_execute(){
 	//Operand 2 is immediate if ALU_src = 1, for I-type
 	uint32_t read_data_1 = prevState.decExe.read_data_1;
 	uint32_t read_data_2 = prevState.decExe.read_data_2;
+
+	//prevState.decExe.forward_a = prevState.decExe.forward_b = 0;
+	//detect_data_hazard();
 
 	uint32_t operand_1 = 0;
 	uint32_t operand_2 = 0;
@@ -333,20 +373,49 @@ void Processor::pipelined_execute(){
 
 	state.exeMem.write_data = operand_2;
 	//operand_2 needs to become write_data unconditionally
-	uint32_t alu_zero = 0; //check validity
+
+	if (ctrl.ALU_src) //mux for I type
+		operand_2 = imm;
+	
+	uint32_t alu_zero = 0;
+
 	state.exeMem.alu_result = alu.execute(operand_1, operand_2, alu_zero);
 
+
+	//logic to take care of updating values read from register in case of forwarding
+	//don't remember why this works, but its necessary
+
+		
+	/*if (get_forwarding_a() != 0) {
+		state.exeMem.read_data_1 = operand_1;  //Use forwarded value
+	} else {
+		state.exeMem.read_data_1 = prevState.decExe.read_data_1;  //Use original value
+	}
+	
+	if (get_forwarding_b() != 0 && !ctrl.ALU_src) {
+		//Only update read_data_2 if we're using register value (not immediate)
+		state.exeMem.read_data_2 = operand_2;  //Use forwarded value
+	} else {
+		state.exeMem.read_data_2 = prevState.decExe.read_data_2;  //Use original value
+	}*/
+
 	//send updated values down the pipeline
+	//state.exeMem.read_data_1 = prevState.decExe.read_data_1;
+	//state.exeMem.read_data_2 = prevState.decExe.read_data_2;
 	state.exeMem.rd = prevState.decExe.rd;
 	state.exeMem.rt = prevState.decExe.rt;
+	//state.exeMem.operand_1 = operand_1;
+	//state.exeMem.operand_2 = operand_2;
 	state.exeMem.alu_zero = alu_zero;
-	
+	//state.exeMem.imm = prevState.decExe.imm;
+	//state.exeMem.addr = prevState.decExe.addr;
+
+	state.exeMem.pc = prevState.decExe.pc;
 	detect_control_hazard(ctrl);
 }
 
 
 void Processor::pipelined_mem(){
-
 	control_t &ctrl = prevState.exeMem.control;
 	state.memWrite.control = ctrl; //same as last time
 
@@ -358,9 +427,11 @@ void Processor::pipelined_mem(){
 		bool read = memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0);
 		if (read){
 			cache_penalty_mem--;
+			//return;
 		}else{
 			state.memWrite = prevState.memWrite;
 			state.memWrite.control.reset();
+			//cache_penalty_mem--;
 			return;
 		}
 	}
@@ -370,10 +441,11 @@ void Processor::pipelined_mem(){
 	//First read no matter whether it is a load or a store
 	bool cache_access_successful = memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0);
 	if (!cache_access_successful) {
-		cout << "Cache Miss " << "\n";
 		cache_penalty_mem = 1;  
 		return;  
 	}
+	//while(!memory->access(prevState.exeMem.alu_result, read_data_mem, 0, ctrl.mem_read | ctrl.mem_write, 0)){}
+
 	
 	//Stores: sb or sh mask and preserve original leftmost bits
 
@@ -385,7 +457,13 @@ void Processor::pipelined_mem(){
 	
 	//Write to memory only if mem_write is 1, i.e store
 	memory->access(prevState.exeMem.alu_result, read_data_mem, write_data_mem, ctrl.mem_read, ctrl.mem_write);
-	
+	/*	
+	if (!cache_access_successful) {
+		cache_penalty_mem_write = 60;  
+		return;  
+	}
+	*/ //shouldnt miss on a write
+
 	//Loads: lbu or lhu modify read data by masking
 	read_data_mem &= ctrl.halfword ? 0xffff : ctrl.byte ? 0xff : 0xffffffff;
 
@@ -402,6 +480,12 @@ void Processor::pipelined_mem(){
 			break;
 	}
 	
+	//state.memWrite.imm = prevState.exeMem.imm;
+	//state.memWrite.addr = prevState.exeMem.addr;
+	//state.memWrite.alu_zero = prevState.exeMem.alu_zero;
+	//state.memWrite.read_data_1 = prevState.exeMem.alu_result; //alu_result gets unconditionally sent forward
+	//state.memWrite.read_data_2 = prevState.exeMem.read_data_2;
+	state.memWrite.pc = prevState.exeMem.pc;
 }
 
 void Processor::pipelined_wb(){
@@ -413,11 +497,12 @@ void Processor::pipelined_wb(){
 			ctrl.reg_write, prevState.memWrite.write_data);
 
 	//Update PC
-	//regfile.pc += (ctrl.branch && !ctrl.bne && prevState.memWrite.alu_zero) || 
-	//		(ctrl.bne && !prevState.memWrite.alu_zero) ? prevState.memWrite.imm << 2 : 0;  //replaced by hazard detection
+	//processor_pc += (ctrl.branch && !ctrl.bne && prevState.memWrite.alu_zero) || 
+			//(ctrl.bne && !prevState.memWrite.alu_zero) ? prevState.memWrite.imm << 2 : 0;  //replaced by hazard detection
 
-	//regfile.pc = ctrl.jump_reg ? prevState.memWrite.write_data : 
-	//		ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.write_data << 2): regfile.pc;
+	//processor_pc = ctrl.jump_reg ? prevState.memWrite.write_data : 
+			//ctrl.jump ? (regfile.pc & 0xf0000000) & (prevState.memWrite.write_data << 2): regfile.pc;
+	regfile.pc = prevState.memWrite.pc;
 }
 
 void Processor::pipelined_processor_advance(){

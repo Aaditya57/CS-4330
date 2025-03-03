@@ -3,6 +3,13 @@
 #include "ALU.h"
 #include "control.h"
 
+#ifdef ENABLE_DEBUG
+#define DEBUG(x) x
+#else
+#define DEBUG(x) 
+#endif
+
+
 class Processor{
 	//forwarding unit
 					
@@ -10,20 +17,26 @@ class Processor{
 	bool stall = false; 
 	unsigned int cache_penalty_mem = 0;
 	unsigned int cache_penalty_fetch = 0;
-	int fetchMisses;
+
 	int opt_level;
 	ALU alu;
 	control_t control;
 	Memory *memory;
 	Registers regfile;
+
+	uint32_t processor_pc = 0;
 	//add other structures as needed
 	//pipelined processor
 
 	struct IF_ID{
 		uint32_t instruction; //obvious
+		uint32_t pc;
 	};
 	
 	struct ID_EX{
+		//uint32_t forward_a;
+		//uint32_t forward_b;
+
 		int opcode;
 		int rs, rt, rd;
 
@@ -35,6 +48,7 @@ class Processor{
 		uint32_t read_data_1, read_data_2; //product of
 	
 		control_t control; //preserve control across signals cycles
+		uint32_t pc;
 	};
 	
 
@@ -45,11 +59,13 @@ class Processor{
 		uint32_t read_data_1, read_data_2; //persist from prev stage
 		int rd, rt; //registers
 		uint32_t write_data;
+		//uint32_t operand_1, operand_2; //operands from prev stage
 		uint32_t alu_zero; //same
+		//uint32_t addr; //address for mem access
 		uint32_t alu_result;
 			
 		control_t control; //preserve control across signals cycles
-
+		uint32_t pc;
 	};
 	
 	struct MEM_WB{
@@ -57,10 +73,12 @@ class Processor{
 		uint32_t write_data; //data to write
 		
 		uint32_t imm;
+		//uint32_t addr;
 		uint32_t alu_zero;
+		//uint32_t read_data_1, read_data_2;
 		
 		control_t control; //preserve control across signals cycles
-	
+		uint32_t pc;	
 	};
 	
 	//allow access to correct pipeline registers across
@@ -76,7 +94,7 @@ class Processor{
 	pipelineState state;
 	pipelineState prevState; //store the previous state so we can simulate shared state across contexts
 	
-	//add private functions
+		//add private functions
 	void single_cycle_processor_advance();
 	void pipelined_processor_advance();
 	
@@ -97,7 +115,6 @@ class Processor{
 	 	}
 	 	return;
 	}
-
 	//possible forwarding unit inputs:
 	//prevState.exeDec.rd
 	//prevState.memWrite.write_reg
@@ -117,6 +134,7 @@ class Processor{
 		//Forward from MEM stage
 		if (prevState.exeMem.control.reg_write &&  //reg_write signal set
 			((prevState.exeMem.rt ==  prevState.decExe.rs) || //I type	
+			//prevState.exeMem.rd != 0 && 
 			(prevState.exeMem.rd == prevState.decExe.rs))){  //R type
 				return 2; //forward from mem
 		} 
@@ -160,33 +178,37 @@ class Processor{
 			if (branch_taken){
 				// Clear fetch/decode and decode/execute pipeline registers
 				//PROBABLY DOESNT WORK, FIX
+				//clear_ifid_idex();	
 				clear_IF_ID();
 				clear_ID_EX();	
-				regfile.pc += state.exeMem.imm << 2; 
-				regfile.pc -= 8; // account for pc increments in the past two cycles which will be flushed
+				//processor_pc += state.exeMem.imm << 2; 
+				processor_pc = state.exeMem.pc + 4 + (state.exeMem.imm << 2); 
+
+				//regfile.pc -= 8; // account for pc increments in the past two cycles which will be flushed
 			}
 		}
 
-		if (control.jump){  // j, jal instructions
-	
+		if (control.jump){
 			clear_IF_ID();
 			clear_ID_EX();
-			regfile.pc = control.jump_reg ? prevState.memWrite.write_data : 
-					control.jump ? (regfile.pc & 0xf0000000) | (prevState.memWrite.write_data << 2) : regfile.pc;
+		
+			if (control.jump_reg){
+				// jr instruction - jump to register value
+				processor_pc = prevState.decExe.read_data_1;
+			} else{
+				// j/jal instruction - construct target address
+				// IMPORTANT: Use OR (|) not AND (&) to combine the high bits with address
+				processor_pc = (prevState.decExe.pc & 0xf0000000) | (prevState.decExe.addr << 2);
+			}
+		
+		// Debug the new PC value
+			DEBUG(cout << "JUMP TARGET: PC=0x" << hex << processor_pc << dec << endl);
 		}	
 	}
-
 	public:
 		Processor(Memory *mem){ regfile.pc = 0; memory = mem;}
 
-		uint32_t getPC(){ 
-			uint32_t fake_pc = (regfile.pc > 20) ? regfile.pc -20 : regfile.pc;		
-
-		return fake_pc;
-		}
-
-		//Get PC
-//		uint32_t getPC(){ return regfile.pc; }
+		uint32_t getPC(){ return regfile.pc;}
 
 		//Prints the Register File
 		void printRegFile(){ regfile.print(); }
@@ -210,6 +232,7 @@ class Processor{
 		void pipelined_wb();
 
 		void flush_pipeline();
+
 		
 		void clear_ID_EX(){
 			state.decExe.opcode = 0;
@@ -222,9 +245,12 @@ class Processor{
 			state.decExe.addr = 0;
 			state.decExe.read_data_1 = 0;
 			state.decExe.read_data_2 = 0;
-	
+			
+			state.decExe.pc = 0;	
 			state.decExe.control.reset();
 		}
 	
-		void clear_IF_ID(){ state.fetchDecode.instruction = 0; }
+		void clear_IF_ID(){ 
+			state.fetchDecode.pc = 0;
+			state.fetchDecode.instruction = 0; }
 };
