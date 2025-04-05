@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <string>
 #include <cstring>
-#include <elf.h>
+#include <libelf.h>
 #include <sys/types.h>
 #include <fcntl.h>
 #include <unistd.h>
