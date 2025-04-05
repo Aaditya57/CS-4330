@@ -7,6 +7,7 @@
 *.o
 *.obj
 
+
 # Precompiled Headers
 *.gch
 *.pch
@@ -30,5 +31,17 @@
 *.exe
 *.out
 *.app
+#misc
+*.swp
+log
+processor
+ignore/
+bins/
+mips_cpu/processor
+mips_cpu/log
+bins2/
+logs/
+test_data_pipeline/
+cycle_log
 .vscode/c_cpp_properties.json
 /.vscode
